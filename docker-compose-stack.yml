@@ -12,7 +12,7 @@ services:
       - gitlab-runner-config:/etc/gitlab-runner gitlab/gitlab-runner register
     environment:
       - CI_SERVER_URL=https://git.${MASTER_URL}/
-      - REGISTRATION_TOKEN=QCsS3YXezqds5B559xti
+      - REGISTRATION_TOKEN=${GITLAB_RUNNER_TOKEN}
     networks:
       - private
     logging:

@@ -1,0 +1,113 @@
+version: "3.8"
+services:
+  gitlab:
+    image: "yrzr/gitlab-ce-arm64v8" #arm64
+    hostname: "git.${MASTER_URL}"
+    ports:
+      - "2020:80"
+      - "2023:443"
+      - "2022:22"
+    volumes:
+      - ./git/data:/var/opt/gitlab
+      - ./git/logs:/var/log/gitlab
+      - ./git/config:/etc/gitlab
+    networks:
+      - private
+      - public
+    deploy:
+      placement:
+        constraints: [node.role == manager]
+      restart_policy:
+        condition: on-failure
+        delay: 900s
+        max_attempts: 3
+        window: 900s
+    logging:
+      driver: none
+
+  nginx-proxy-manager-db:
+    image: "jc21/mariadb-aria:latest"
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MASTER_PASSWORD}
+      MYSQL_DATABASE: "nginx_proxy_db"
+      MYSQL_USER: "nginx_proxy_db"
+      MYSQL_PASSWORD: ${MASTER_PASSWORD}
+    deploy:
+      placement:
+        constraints: [node.role == manager]
+      restart_policy:
+        condition: on-failure
+        delay: 30s
+        max_attempts: 3
+        window: 600s
+    networks:
+      - private
+    volumes:
+      - ./nginx-proxy-manager/db:/var/lib/mysql
+    logging:
+      driver: none
+
+  nginx-proxy-manager-app:
+    image: "jc21/nginx-proxy-manager:latest"
+    hostname: "proxy.${MASTER_URL}"
+    ports:
+      - "80:80"
+      - "81:81"
+      - "443:443"
+    environment:
+      DB_MYSQL_HOST: "nginx-proxy-manager-db"
+      DB_MYSQL_PORT: 3306
+      DB_MYSQL_USER: "nginx_proxy_db"
+      DB_MYSQL_PASSWORD: ${MASTER_PASSWORD}
+      DB_MYSQL_NAME: "nginx_proxy_db"
+    deploy:
+      placement:
+        constraints: [node.role == manager]
+      restart_policy:
+        condition: on-failure
+        delay: 30s
+        max_attempts: 3
+        window: 600s
+    networks:
+      - private
+      - public
+    volumes:
+      - ./nginx-proxy-manager/data:/data
+      - ./nginx-proxy-manager/letsencrypt:/etc/letsencrypt
+    depends_on:
+      - nginx-proxy-manager-db
+    logging:
+      driver: none
+
+  portainer:
+    image: portainer/portainer-ce
+    command: -H tcp://tasks.agent:2027 --tlsskipverify
+    hostname: "portainer.${MASTER_URL}"
+    ports:
+      - "2024:9433"
+      - "2025:9000"
+      - "2026:8000"
+    volumes:
+      - ./portainer/data:/data
+    networks:
+      - private
+      - public
+    logging:
+      driver: none
+    deploy:
+      mode: replicated
+      replicas: 1
+      placement:
+        constraints: [node.role == manager]
+      restart_policy:
+        condition: on-failure
+        delay: 30s
+        max_attempts: 3
+        window: 600s
+networks:
+  public:
+    driver: overlay
+    external: true
+  private:
+    driver: overlay
+    external: true
